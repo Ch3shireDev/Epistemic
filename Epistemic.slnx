@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Epistemic.Domain.Tests.Unit/Epistemic.Domain.Tests.Unit.csproj" />
+  <Project Path="Epistemic.Domain/Epistemic.Domain.csproj" />
+</Solution>
