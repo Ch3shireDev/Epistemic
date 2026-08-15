@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="Epistemic.App.Blazor/Epistemic.App.Blazor.csproj" />
+  <Project Path="Epistemic.App.Console/Epistemic.App.Console.csproj" />
   <Project Path="Epistemic.Domain.Tests.Unit/Epistemic.Domain.Tests.Unit.csproj" />
   <Project Path="Epistemic.Domain/Epistemic.Domain.csproj" />
 </Solution>
