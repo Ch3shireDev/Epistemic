@@ -32,8 +32,11 @@ jobs:
       - name: Restore
         run: dotnet restore
 
+      - name: Test
+        run: dotnet test --no-restore
+
       - name: Publish
-        run: dotnet publish -c Release -o ./publish
+        run: dotnet publish Epistemic.App.Blazor/Epistemic.App.Blazor.csproj -c Release -o ./publish
         
       # Zapobiega interpretowaniu _framework jako katalogu Jekyll.
       - name: Disable Jekyll
