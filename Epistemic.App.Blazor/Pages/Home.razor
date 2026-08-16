@@ -1,4 +1,4 @@
-@page "/"
+﻿@page "/"
 @implements IAsyncDisposable
 @using System.Diagnostics
 @using System.Globalization
@@ -42,19 +42,19 @@
                             {
                                 <polygon class="hex-progress" points="@HexPoints(61)" pathLength="100"
                                          style="stroke-dashoffset:@(100 - hex.Progress)" />
-                                <text class="hex-time" y="-2">@Math.Ceiling(hex.SecondsLeft)s</text>
-                                <text class="hex-caption" y="23">DOJRZEWA</text>
+                                <svg:text class="hex-time" y="-2">@Math.Ceiling(hex.SecondsLeft)s</svg:text>
+                                <svg:text class="hex-caption" y="23">DOJRZEWA</svg:text>
                             }
                             else if (hex.IsComplete)
                             {
                                 <path class="check" d="M-22 0 L-7 15 L25 -20" />
-                                <text class="hex-caption" y="38">GOTOWE</text>
+                                <svg:text class="hex-caption" y="38">GOTOWE</svg:text>
                             }
                             else
                             {
                                 <circle class="hex-plus-ring" r="19" />
                                 <path class="plus" d="M-8 0H8M0 -8V8" />
-                                <text class="hex-caption" y="37">ROZWIŃ</text>
+                                <svg:text class="hex-caption" y="37">ROZWIŃ</svg:text>
                             }
                         </g>
                     }
