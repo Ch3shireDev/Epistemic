@@ -1,7 +1,169 @@
-﻿@page "/"
+@page "/"
+@implements IAsyncDisposable
+@using System.Diagnostics
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Web
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Epistemic — sieć idei</PageTitle>
 
-<h1>Hello, world!</h1>
+<main class="app-shell">
+    <header class="topbar">
+        <a class="brand" href="/" aria-label="Epistemic — strona główna">
+            <span class="brand-mark"><i></i><i></i><i></i></span>
+            <span>epistemic</span>
+        </a>
+        <div class="status-pill"><span></span> Sieć aktywna</div>
+    </header>
 
-Welcome to your new app.
+    <section class="intro">
+        <p class="eyebrow">MAPA TWOJEJ WIEDZY</p>
+        <h1>Każda idea ma<br />swój <em>początek.</em></h1>
+        <p class="lead">Wybierz pole, pozwól mu dojrzeć i obserwuj,<br class="desktop-only" /> jak Twoja sieć wiedzy rośnie.</p>
+    </section>
+
+    <section class="workspace" aria-label="Interaktywna siatka heksagonów">
+        <div class="canvas"
+             @onpointerdown="PointerDown" @onpointermove="PointerMove"
+             @onpointerup="PointerUp" @onpointercancel="PointerUp"
+             @onwheel="Wheel" @onwheel:preventDefault>
+            <div class="grid-dots"></div>
+            <svg viewBox="0 0 1000 680" role="group" aria-label="Sieć heksagonów">
+                <g transform="translate(@PanX @PanY) scale(@Zoom.ToString("0.###", CultureInfo.InvariantCulture))">
+                    @foreach (var hex in Hexagons)
+                    {
+                        var point = Position(hex);
+                        <g class="hex-node @(hex.IsRunning ? "is-running" : "") @(hex.IsComplete ? "is-complete" : "")"
+                           transform="translate(@point.X @point.Y)" role="button" tabindex="0"
+                           @onclick="() => Activate(hex)" @onclick:stopPropagation
+                           @onkeydown="e => HandleKey(e, hex)">
+                            <polygon class="hex-shadow" points="@HexPoints(76)" />
+                            <polygon class="hex-base" points="@HexPoints(72)" style="--hex-color:@hex.Color" />
+                            @if (hex.IsRunning)
+                            {
+                                <polygon class="hex-progress" points="@HexPoints(61)" pathLength="100"
+                                         style="stroke-dashoffset:@(100 - hex.Progress)" />
+                                <text class="hex-time" y="-2">@Math.Ceiling(hex.SecondsLeft)s</text>
+                                <text class="hex-caption" y="23">DOJRZEWA</text>
+                            }
+                            else if (hex.IsComplete)
+                            {
+                                <path class="check" d="M-22 0 L-7 15 L25 -20" />
+                                <text class="hex-caption" y="38">GOTOWE</text>
+                            }
+                            else
+                            {
+                                <circle class="hex-plus-ring" r="19" />
+                                <path class="plus" d="M-8 0H8M0 -8V8" />
+                                <text class="hex-caption" y="37">ROZWIŃ</text>
+                            }
+                        </g>
+                    }
+                </g>
+            </svg>
+
+            <div class="hint"><span>+</span> Wybierz pusty heksagon, aby rozpocząć</div>
+            <div class="controls" aria-label="Sterowanie widokiem">
+                <button @onclick="ZoomIn" aria-label="Przybliż">＋</button>
+                <button @onclick="ResetView" aria-label="Wyśrodkuj widok">⌖</button>
+                <button @onclick="ZoomOut" aria-label="Oddal">−</button>
+            </div>
+            <div class="zoom-label">@Math.Round(Zoom * 100)%</div>
+        </div>
+    </section>
+
+    <footer>
+        <div><strong>@Hexagons.Count(h => h.IsComplete)</strong><span>DOJRZAŁE IDEE</span></div>
+        <div><strong>@Hexagons.Count</strong><span>POLA W SIECI</span></div>
+        <p>Przeciągnij, aby przesunąć <b>·</b> Użyj kółka lub przycisków, aby zmienić skalę</p>
+    </footer>
+</main>
+
+@code {
+    private readonly List<Hexagon> Hexagons = [new(0, 0, "#ef8a66")];
+    private readonly Dictionary<long, (double X, double Y)> pointers = [];
+    private CancellationTokenSource? timerCancellation;
+    private double PanX = 500;
+    private double PanY = 340;
+    private double Zoom = 1;
+    private double? pinchDistance;
+    private readonly string[] colors = ["#ef8a66", "#61c8ac", "#7b8fe8", "#eabf58", "#cf74ad", "#62aee8"];
+
+    private static string HexPoints(double radius) => string.Join(' ', Enumerable.Range(0, 6).Select(i => {
+        var a = Math.PI / 180 * (60 * i - 30);
+        return $"{(radius * Math.Cos(a)).ToString("0.##", CultureInfo.InvariantCulture)},{(radius * Math.Sin(a)).ToString("0.##", CultureInfo.InvariantCulture)}";
+    }));
+
+    private static (double X, double Y) Position(Hexagon hex)
+        => (Math.Sqrt(3) * 92 * (hex.Q + hex.R / 2d), 138 * hex.R);
+
+    private async Task Activate(Hexagon hex)
+    {
+        if (hex.IsComplete || hex.IsRunning) return;
+        hex.IsRunning = true;
+        hex.Duration = Random.Shared.Next(5, 21);
+        hex.StartedAt = Stopwatch.GetTimestamp();
+        timerCancellation ??= new CancellationTokenSource();
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(50));
+            while (await timer.WaitForNextTickAsync(timerCancellation.Token))
+            {
+                hex.Elapsed = Stopwatch.GetElapsedTime(hex.StartedAt).TotalSeconds;
+                if (hex.Elapsed >= hex.Duration)
+                {
+                    hex.Elapsed = hex.Duration;
+                    hex.IsRunning = false;
+                    hex.IsComplete = true;
+                    GrowAround(hex);
+                    break;
+                }
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private void GrowAround(Hexagon origin)
+    {
+        int[,] directions = { { 1, 0 }, { 1, -1 }, { 0, -1 }, { -1, 0 }, { -1, 1 }, { 0, 1 } };
+        for (var i = 0; i < 6; i++)
+        {
+            var q = origin.Q + directions[i, 0];
+            var r = origin.R + directions[i, 1];
+            if (Hexagons.All(h => h.Q != q || h.R != r))
+                Hexagons.Add(new(q, r, colors[Random.Shared.Next(colors.Length)]));
+        }
+        StateHasChanged();
+    }
+
+    private void HandleKey(KeyboardEventArgs e, Hexagon hex) { if (e.Key is "Enter" or " ") _ = Activate(hex); }
+    private void ZoomIn() => ZoomAt(1.15);
+    private void ZoomOut() => ZoomAt(.87);
+    private void ResetView() { PanX = 500; PanY = 340; Zoom = 1; }
+    private void Wheel(WheelEventArgs e) => ZoomAt(e.DeltaY < 0 ? 1.08 : .92);
+    private void ZoomAt(double amount) => Zoom = Math.Clamp(Zoom * amount, .28, 2.2);
+
+    private void PointerDown(PointerEventArgs e) => pointers[e.PointerId] = (e.ClientX, e.ClientY);
+    private void PointerUp(PointerEventArgs e) { pointers.Remove(e.PointerId); pinchDistance = null; }
+    private void PointerMove(PointerEventArgs e)
+    {
+        if (!pointers.TryGetValue(e.PointerId, out var old)) return;
+        pointers[e.PointerId] = (e.ClientX, e.ClientY);
+        if (pointers.Count == 1) { PanX += e.ClientX - old.X; PanY += e.ClientY - old.Y; return; }
+        var pair = pointers.Values.Take(2).ToArray();
+        var distance = Math.Sqrt(Math.Pow(pair[0].X - pair[1].X, 2) + Math.Pow(pair[0].Y - pair[1].Y, 2));
+        if (pinchDistance is > 0) ZoomAt(distance / pinchDistance.Value);
+        pinchDistance = distance;
+    }
+
+    public ValueTask DisposeAsync() { timerCancellation?.Cancel(); timerCancellation?.Dispose(); return ValueTask.CompletedTask; }
+
+    private sealed class Hexagon(int q, int r, string color)
+    {
+        public int Q { get; } = q; public int R { get; } = r; public string Color { get; } = color;
+        public bool IsRunning { get; set; } public bool IsComplete { get; set; }
+        public int Duration { get; set; } public double Elapsed { get; set; } public long StartedAt { get; set; }
+        public double Progress => Duration == 0 ? 0 : Elapsed / Duration * 100;
+        public double SecondsLeft => Math.Max(0, Duration - Elapsed);
+    }
+}
