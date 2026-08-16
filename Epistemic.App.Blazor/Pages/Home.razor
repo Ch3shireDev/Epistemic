@@ -34,6 +34,7 @@
                         var point = Position(hex);
                         <g class="hex-node @(hex.IsRunning ? "is-running" : "") @(hex.IsComplete ? "is-complete" : "")"
                            transform="translate(@point.X @point.Y)" role="button" tabindex="0"
+                           @onpointerdown:stopPropagation
                            @onclick="() => Activate(hex)" @onclick:stopPropagation
                            @onkeydown="e => HandleKey(e, hex)">
                             <polygon class="hex-shadow" points="@HexPoints(76)" />
