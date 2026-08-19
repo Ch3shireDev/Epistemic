@@ -32,9 +32,10 @@
                     @foreach (var hex in Hexagons)
                     {
                         var point = Position(hex);
-                        <g class="hex-node @(hex.IsRunning ? "is-running" : "") @(hex.IsComplete ? "is-complete" : "")"
+                        <g class="hex-node @(hex.EnterDelayMs > 0 ? "is-entering" : "") @(hex.IsRunning ? "is-running" : "") @(hex.IsComplete ? "is-complete" : "")"
                            transform="translate(@point.X @point.Y)" role="button" tabindex="0"
-                           @onpointerdown:stopPropagation
+                           style="--enter-delay:@($"{hex.EnterDelayMs}ms")"
+                           @onpointerdown="() => Activate(hex)" @onpointerdown:stopPropagation
                            @onclick="() => Activate(hex)" @onclick:stopPropagation
                            @onkeydown="e => HandleKey(e, hex)">
                             <polygon class="hex-shadow" points="@HexPoints(76)" />
@@ -95,14 +96,20 @@
     }));
 
     private static (double X, double Y) Position(Hexagon hex)
-        => (Math.Sqrt(3) * 92 * (hex.Q + hex.R / 2d), 138 * hex.R);
+        => (Math.Sqrt(3) * 84 * (hex.Q + hex.R / 2d), 126 * hex.R);
 
-    private async Task Activate(Hexagon hex)
+    private void Activate(Hexagon hex)
     {
         if (hex.IsComplete || hex.IsRunning) return;
         hex.IsRunning = true;
-        hex.Duration = Random.Shared.Next(5, 21);
+        hex.Duration = Random.Shared.Next(5, 11);
         hex.StartedAt = Stopwatch.GetTimestamp();
+        _ = RunActivationAsync(hex);
+        StateHasChanged();
+    }
+
+    private async Task RunActivationAsync(Hexagon hex)
+    {
         timerCancellation ??= new CancellationTokenSource();
         try
         {
@@ -132,12 +139,12 @@
             var q = origin.Q + directions[i, 0];
             var r = origin.R + directions[i, 1];
             if (Hexagons.All(h => h.Q != q || h.R != r))
-                Hexagons.Add(new(q, r, colors[Random.Shared.Next(colors.Length)]));
+                Hexagons.Add(new(q, r, colors[Random.Shared.Next(colors.Length)]) { EnterDelayMs = i * 90 });
         }
         StateHasChanged();
     }
 
-    private void HandleKey(KeyboardEventArgs e, Hexagon hex) { if (e.Key is "Enter" or " ") _ = Activate(hex); }
+    private void HandleKey(KeyboardEventArgs e, Hexagon hex) { if (e.Key is "Enter" or " ") Activate(hex); }
     private void ZoomIn() => ZoomAt(1.15);
     private void ZoomOut() => ZoomAt(.87);
     private void ResetView() { PanX = 500; PanY = 340; Zoom = 1; }
@@ -164,6 +171,7 @@
         public int Q { get; } = q; public int R { get; } = r; public string Color { get; } = color;
         public bool IsRunning { get; set; } public bool IsComplete { get; set; }
         public int Duration { get; set; } public double Elapsed { get; set; } public long StartedAt { get; set; }
+        public int EnterDelayMs { get; init; }
         public double Progress => Duration == 0 ? 0 : Elapsed / Duration * 100;
         public double SecondsLeft => Math.Max(0, Duration - Elapsed);
     }
